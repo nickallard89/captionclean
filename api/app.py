@@ -39,6 +39,7 @@ def process_srt():
     
     file = request.files['file']
     char_limit = int(request.form.get('charLimit', 42))
+    export_format = request.form.get('exportFormat', 'original')
     
     if file.filename == '':
         return {'error': 'No file selected'}, 400
@@ -46,74 +47,59 @@ def process_srt():
     if not (file.filename.endswith('.srt') or file.filename.endswith('.txt')):
         return {'error': 'File must be an SRT or TXT file'}, 400
 
-    with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.srt') as temp_out:
-        # Read and decode the uploaded file
+    # Determine output extension based on export format
+    if export_format == 'srt':
+        output_extension = '.srt'
+    elif export_format == 'txt':
+        output_extension = '.txt'
+    else:  # 'original'
+        output_extension = os.path.splitext(file.filename)[1]
+
+    # Create temporary output file
+    with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=output_extension) as temp_out:
+        # Read and process the file content
         file_content = file.read().decode('utf-8')
         
-        # Split content into lines
-        lines = file_content.split('\n')
-        cleaned_lines = [line.strip() for line in lines if line.strip()]
-        
-        # Process based on file type
-        if file.filename.endswith('.txt'):
-            # For TXT files, create SRT format
-            subtitle_number = 1
-            output_lines = []
-            
-            for i, line in enumerate(cleaned_lines):
-                # Add subtitle number
-                output_lines.append(str(subtitle_number))
-                
-                # Add dummy timestamp (you might want to calculate real timestamps)
-                start_time = f"00:00:{str(i*4).zfill(2)},000"
-                end_time = f"00:00:{str(i*4 + 3).zfill(2)},000"
-                output_lines.append(f"{start_time} --> {end_time}")
-                
-                # Process and add the text
-                balanced_text = split_subtitle_text(line, char_limit)
-                output_lines.append(balanced_text)
-                output_lines.append("")  # Empty line between subtitles
-                
-                subtitle_number += 1
-                
-            processed_content = "\n".join(output_lines)
-        else:
-            # For SRT files, maintain existing format
-            buffer = []
-            output_lines = []
-            
-            for line in cleaned_lines:
-                buffer.append(line)
-                
-                if len(buffer) >= 3:
+        buffer = []
+        for line in file_content.split('\n'):
+            if line.strip():
+                buffer.append(line.strip())
+            else:
+                if buffer:
                     number = buffer[0]
                     timestamp = buffer[1]
                     text = " ".join(buffer[2:])
                     
                     balanced_text = split_subtitle_text(text, char_limit)
                     
-                    output_lines.extend([number, timestamp, balanced_text, ""])
-                    buffer = []
-            
-            # Handle any remaining lines
-            if buffer:
-                output_lines.extend(buffer)
-                
-            processed_content = "\n".join(output_lines)
+                    temp_out.write(f"{number}\n{timestamp}\n{balanced_text}\n\n")
+                buffer = []
         
-        # Write to output file
-        temp_out.write(processed_content)
+        # Handle last block if file doesn't end with newline
+        if buffer:
+            number = buffer[0]
+            timestamp = buffer[1]
+            text = " ".join(buffer[2:])
+            balanced_text = split_subtitle_text(text, char_limit)
+            temp_out.write(f"{number}\n{timestamp}\n{balanced_text}\n")
+        
         temp_out.seek(0)
         
-        # Create response filename (always .srt)
-        output_filename = secure_filename(file.filename.replace('.txt', '.srt').replace('.srt', '_cleaned.srt'))
+        # Create output filename with appropriate extension
+        base_filename = os.path.splitext(file.filename)[0]
+        output_filename = secure_filename(base_filename + '_cleaned' + output_extension)
         
-        return send_file(
+        response = send_file(
             temp_out.name,
             as_attachment=True,
             download_name=output_filename,
             mimetype='text/plain'
         )
+        
+        # Explicitly set the Content-Disposition header
+        response.headers["Content-Disposition"] = f"attachment; filename={output_filename}"
+        
+        return response
 
 if __name__ == '__main__':
     app.run(port=5000, debug=True)
