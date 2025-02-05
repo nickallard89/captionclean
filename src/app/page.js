@@ -39,7 +39,7 @@ export default function Home() {
       formData.append('exportFormat', exportAsSrt ? 'srt' : exportAsTxt ? 'txt' : 'original')
 
       console.log('Sending request to backend...')
-      const response = await fetch('http://127.0.0.1:5000/process-srt', {
+      const response = await fetch('https://captionclean.onrender.com', {
         method: 'POST',
         body: formData,
       })
