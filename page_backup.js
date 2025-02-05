@@ -30,36 +30,50 @@ export default function Home() {
 
   const processFile = async () => {
     if (!file) return
-  
+
     setProcessing(true)
     try {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('charLimit', charLimit)
       formData.append('exportFormat', exportAsSrt ? 'srt' : exportAsTxt ? 'txt' : 'original')
-  
-      const response = await fetch('https://captionclean.onrender.com/process-srt', {
+
+      console.log('Sending request to backend...')
+      const response = await fetch('http://127.0.0.1:5000/process-srt', {
         method: 'POST',
         body: formData,
       })
-  
+
+      console.log('Response status:', response.status)
+      
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Server error: ${response.status} - ${errorText}`);
+        const errorText = await response.text()
+        throw new Error(`Server error: ${response.status} - ${errorText}`)
       }
-  
+
+      // Get filename from Content-Disposition header if available
+      const contentDisposition = response.headers.get('Content-Disposition')
+      let filename
+      if (contentDisposition && contentDisposition.includes('filename=')) {
+        filename = contentDisposition.split('filename=')[1].replace(/["]/g, '')
+      } else {
+        // Determine extension based on export options
+        let extension = exportAsSrt ? '.srt' : exportAsTxt ? '.txt' : file.name.match(/\.[^.]+$/)[0]
+        filename = file.name.replace(/\.[^.]+$/, '_cleaned' + extension)
+      }
+
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = file.name.replace(/\.(srt|txt)$/, '_cleaned$&')
+      a.download = filename
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
       window.URL.revokeObjectURL(url)
-  
+
     } catch (error) {
-      console.error('Error:', error)
+      console.error('Detailed error:', error)
       alert('Error processing file: ' + error.message)
     } finally {
       setProcessing(false)
