@@ -84,7 +84,7 @@ export default function Home() {
         
         <div className="space-y-6">
           <div>
-            <label className="block text-gray-700 font-medium mb-2">Character Split Point</label>
+            <label className="block text-gray-700 font-medium mb-2">Split Point (characters)</label>
             <input
               type="number"
               value={charLimit}
